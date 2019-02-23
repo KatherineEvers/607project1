@@ -1,0 +1,167 @@
+---
+title: "607 Project 1: Chess Tournament Results Analysis"
+author: "Katherine Evers"
+date: "2/16/2019"
+output: html_document
+---
+
+###Contents  
+
+1.[Project overview](#project_overview)  
+2.[Import data and load Library](#import_data)  
+3.[Clean and format data](#Clean_data)  
+4.[Calculate opponents' average ratings](#avg_rating)  
+5.[Final dataframe](#final_df)
+
+<a id="project_overview"></a>
+
+###Project overview  
+
+In this project, you’re given a text file with chess tournament results where the information has some structure. Your job is to create an R Markdown file that generates a .CSV file with the following information for all of the players:  
+
+Player’s Name, Player’s State, Total Number of Points, Player’s Pre-Rating, and Average Pre Chess Rating of Opponents  
+
+For the first player, the information would be: Gary Hua, ON, 6.0, 1794, 1605  
+
+The chess rating system (invented by a Minnesota statistician named Arpad Elo) has been used in many other contexts, including assessing relative strength of employment candidates by human resource departments.  
+
+Excerpt from text file:
+```{r}
+knitr::include_graphics('/Users/katieevers/Desktop/txtFileExcerpt.png')
+```
+
+<a id="import_data"></a>
+
+###Import data and load library:
+```{r}
+library(tidyverse)
+
+tournamentInfo <- read.delim("tournamentinfo.txt", header = FALSE, stringsAsFactors = FALSE, sep = "|")
+DT::datatable(tournamentInfo, editable = TRUE)
+```
+
+<a id="Clean_data"></a>
+
+###Clean and format data:
+```{r}
+#Remove headers (first 4 rows):
+tournamentInfo2 <- tournamentInfo[-c(1,2,3,4),]
+
+#Create separate data frames by extracting every 3rd row to separate name and ranking rows
+row1 <- tournamentInfo2[seq(1, nrow(tournamentInfo2), 3), ]
+head(row1)
+
+row2 <- tournamentInfo2[seq(2, nrow(tournamentInfo2), 3), ]
+head(row2)
+
+#Combine the two dataframes so information for each player is on a single row
+tournamentInfo3 <- cbind(row1, row2)
+DT::datatable(tournamentInfo3, editable = TRUE)
+
+#Remove columns with NA
+tournamentInfo4 <- tournamentInfo3[ , colSums(is.na(tournamentInfo3)) == 0]
+
+#Rename columns
+names <- c("PairNum", "PlayerName", "TotalPts", "Round1", "Round2", "Round3", "Round4","Round5","Round6","Round7","State","Rating")
+
+names(tournamentInfo4) <- names
+tournamentInfo5 <- tournamentInfo4[names]
+
+#Isolate player's pre rating scores:
+preRating1 <- gsub("-.*$", "",tournamentInfo4$Rating)
+preRating2 <- sub("[^:]*", "",preRating1)
+preRating3 <- gsub("P.*$", "",preRating2)
+preRating <- str_replace_all(preRating3, "[[:punct:]]", "")
+preRating
+
+#Add preRating to the dataframe
+tournamentInfo6 <- cbind(tournamentInfo5, preRating)
+
+# Format the columns with each round result so only player id numbers remain
+tournamentInfo4$Round1 <- sub("[[:alnum:]][[:space:]]+([[:digit:]]+)", "\\1", tournamentInfo4$Round1)
+tournamentInfo4$Round1 <- sub("[[:upper:]]+", "0", tournamentInfo4$Round1)
+
+tournamentInfo4$Round2 <- sub("[[:alnum:]][[:space:]]+([[:digit:]]+)", "\\1", tournamentInfo4$Round2)
+tournamentInfo4$Round2 <- sub("[[:upper:]]+", "0", tournamentInfo4$Round2)
+
+tournamentInfo4$Round3 <- sub("[[:alnum:]][[:space:]]+([[:digit:]]+)", "\\1", tournamentInfo4$Round3)
+tournamentInfo4$Round3 <- sub("[[:upper:]]+", "0", tournamentInfo4$Round3)
+
+tournamentInfo4$Round4 <- sub("[[:alnum:]][[:space:]]+([[:digit:]]+)", "\\1", tournamentInfo4$Round4)
+tournamentInfo4$Round4 <- sub("[[:upper:]]+", "0", tournamentInfo4$Round4)
+
+tournamentInfo4$Round5 <- sub("[[:alnum:]][[:space:]]+([[:digit:]]+)", "\\1", tournamentInfo4$Round5)
+tournamentInfo4$Round5 <- sub("[[:upper:]]+", "0", tournamentInfo4$Round5)
+
+tournamentInfo4$Round6 <- sub("[[:alnum:]][[:space:]]+([[:digit:]]+)", "\\1", tournamentInfo4$Round6)
+tournamentInfo4$Round6 <- sub("[[:upper:]]+", "0", tournamentInfo4$Round6)
+
+tournamentInfo4$Round7 <- sub("[[:alnum:]][[:space:]]+([[:digit:]]+)", "\\1", tournamentInfo4$Round7)
+tournamentInfo4$Round7 <- sub("[[:upper:]]+", "0", tournamentInfo4$Round7)
+
+DT::datatable(tournamentInfo4, editable = TRUE)
+```
+
+<a id="avg_rating"></a>
+
+###Calculate opponents' average ratings:
+```{r}
+# Create a data frame that only contains the rounds columns
+opponentId <- tournamentInfo4[,c("Round1", "Round2", "Round3", "Round4","Round5","Round6","Round7")]
+
+#convert chr to num
+opponentId[] <- lapply(opponentId, function(x) as.numeric(as.character(x)))
+
+# Create a lookup table with player id and corresponding pre-rating
+ratingLookup <- tournamentInfo6[,c("PairNum","preRating")]
+
+ratingLookup[] <- lapply(ratingLookup, function(x) as.numeric(as.character(x)))
+
+#Use a for loop to replace player id with rating
+for (i in 1:46) {
+  for (j in 1:7) {
+    opponentId[i,j] <- ratingLookup[ratingLookup$PairNum == opponentId[i,j], 2][1]
+  }
+}
+
+#Replace NA with 0
+opponentId[is.na(opponentId)] <- 0
+
+DT::datatable(opponentId, editable = TRUE)
+
+#calculate average opponents' ratings by taking mean for each row
+averageOpponentsRating <- round(rowMeans(opponentId, na.rm=TRUE))
+averageOpponentsRating<-averageOpponentsRating[1:46]
+
+#Redo replacement for rows 47-64
+replace <- opponentId[47:64,]
+
+for (i in 1:18) {
+  for (j in 1:7) {
+    replace[i,j] <- ratingLookup[ratingLookup$PairNum == replace[i,j], 2][1]
+  }
+}
+
+#Replace NA with 0
+replace[is.na(replace)] <- 0
+
+#Calculate mean for each row
+averageOpponentsRating1 <- round(rowMeans(replace, na.rm=TRUE))
+
+averageOpponentsRating <- c(averageOpponentsRating, averageOpponentsRating1)
+averageOpponentsRating
+```
+
+<a id="final_df"></a>
+
+###Create final dataframe with desired information
+
+```{r}
+tournamentInfo7 <- tournamentInfo6[,c("PlayerName", "State", "TotalPts", "preRating")]
+
+finalTable <- cbind(tournamentInfo7, averageOpponentsRating)
+DT::datatable(finalTable, editable = TRUE)
+
+#Generate .csv file of final dataframe
+write.csv(finalTable, file = "607Project1result.csv")
+```
